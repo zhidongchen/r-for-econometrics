@@ -1,0 +1,131 @@
+---
+title: "Hypothesis Testing"
+author: "Zhidong Chen"
+output: pdf_document
+fontsize: 11pt
+geometry: margin=1in
+header-includes:
+- \usepackage{booktabs}
+- \usepackage{sectsty} \sectionfont{\centering \emph}
+- \usepackage{xfrac}
+---
+
+```{r setup, include = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#  Setup
+
+```{r, message = FALSE, echo = TRUE}
+
+# Read data
+lawsch85 <- read.csv("data/LAWSCH85.csv")
+
+# Load packages
+library(car)
+```
+
+# Linear Hypothesis Testing
+
+## 1. Single parameter T-test and Joint Significance F-test
+
+```{r, message = FALSE, echo = TRUE}
+
+# See what variables we have in the data
+names(lawsch85)
+
+# Run full unrestricted linear model
+model.ur <- lm(lsalary ~ LSAT + 
+                       GPA  + 
+                       lcost + 
+                       rank, 
+               data = lawsch85)
+
+# Pull a summary of the model resutls
+summary(model.ur) 
+```
+
+Single coefficent T-test and F-test of Joint significance of all slope 
+parameters are included in the results of summary function
+
+
+## 2.Test linear combination of parameters
+
+### ~ Method 1:  Use "car::linearHypothesis()"
+
+```{r}
+# Examples of different linear hypothesis testing
+linearHypothesis(model.ur, c("LSAT = 0", "GPA = 0")) 
+# or lht(model.ur, c("LSAT = 0", "GPA = 0"))
+linearHypothesis(model.ur, "LSAT + GPA = 0", test = "F")
+linearHypothesis(model.ur, "2*LSAT + 1*GPA = 0")
+linearHypothesis(model.ur, "2*LSAT + 1*GPA - rank= 0")
+```
+
+### ~ Method 2: Run restricted model, then use "anova(model.ur, model.r)"
+
+```{r}
+model.r1 <- lm(lsalary ~ llibvol + lcost + rank, data = lawsch85)
+
+# If you we use "anova(model.ur, model.r1)" directly, we get error message:
+# Error in anova.lmlist(object, ...) : 
+# models were not all fitted to the same size of dataset
+
+# To correct for the error, we need to remove the missing values.
+# Missing values are coded as "NA" in R.
+# is.na(object) tests weather each item of the "object" has a missing value. 
+# It returns logical values, "TRUE" or "FALSE". 
+# "!" in front of is.na(object) is the negate sign. 
+
+```
+#### Solution:
+
+```{r}
+# Remove missing values of GPA and LSAT
+lawsch85.subset <- lawsch85[!is.na(lawsch85$GPA) & !is.na(lawsch85$LSAT), ] 
+
+# Unrestricted linear model
+model.ur2 <- lm(lsalary ~ LSAT +
+                       GPA +
+                       llibvol +
+                       lcost +
+                       rank, 
+               data = lawsch85.subset)
+
+# Restricted linear Model
+model.r2 <- lm(lsalary ~ llibvol +
+                       lcost +
+                       rank,
+               data = lawsch85.subset)
+
+# Hypothesis testing using F-test
+anova(model.ur2, model.r2)
+```
+
+#### A note about "car::lht()":
+
+In function lht(), the default test type is an asymptotic Chi-square test. When the model we put in is a lm model such as in all the above examples, the default test type changes 
+to F-test automatically. 
+
+**Caution!** When the model we put in is a different type of model, such as the felm 
+model, to conduct a F-test, we add an option to your function: test = "F".
+
+```{r}
+# For illurstration
+linearHypothesis(model.ur2, c("LSAT = 0", "GPA = 0"), test="F") 
+```
+
+## 3.Recover F-statistic using regression results
+
+F-statistic formula using Sum of Squared Residuals:SSR
+\begin{equation*}
+F = \frac{\sfrac{(SSR_r - SSR_{ur})}{q}}{\sfrac{SSR_{ur}}{(n-k-1)}}
+\end{equation*}
+
+     Plug in the values from above regressions:
+\begin{align*}
+F &= \frac{\sfrac{(1.8942 - 1.6427)}{2}}{\sfrac{1.6427}{130}} \\
+  &= 9.951604
+\end{align*}
+
+
